@@ -600,6 +600,98 @@ let scoreBestStreak = 0;
 // Suivi des doigts actifs sur le clavier tactile
 let activeTouches = {}; // touchId → midi
 
+// ===== V1.3A Audio Engine =====
+
+let audioContext = null;
+let masterGain = null;
+
+const activeVoices = new Map();
+
+function ensureAudioContext() {
+
+    if (!audioContext) {
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = 0.25;
+        masterGain.connect(audioContext.destination);
+
+    }
+
+    if (audioContext.state === "suspended") {
+    audioContext.resume().catch(err => {
+        console.warn("Impossible de reprendre AudioContext :", err);
+    });
+}
+
+}
+
+function midiToFrequency(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playNote(midi, velocity = 80) {
+
+    ensureAudioContext();
+
+if (!audioContext || audioContext.state !== "running") {
+    return;
+}
+
+    // Évite les doublons sur la même note
+    stopNote(midi);
+
+    const osc = audioContext.createOscillator();
+const gain = audioContext.createGain();
+
+osc.type = "triangle";
+osc.frequency.setValueAtTime(
+    midiToFrequency(midi),
+    audioContext.currentTime
+);
+
+const volume = Math.max(0.02, Math.min(velocity / 127, 1));
+
+gain.gain.cancelScheduledValues(audioContext.currentTime);
+gain.gain.setValueAtTime(0, audioContext.currentTime);
+gain.gain.linearRampToValueAtTime(
+    volume * 0.18,
+    audioContext.currentTime + 0.01
+);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+
+    osc.start();
+
+    activeVoices.set(midi, {
+        oscillator: osc,
+        gain: gain
+    });
+
+}
+
+function stopNote(midi) {
+
+    const voice = activeVoices.get(midi);
+
+    if (!voice) return;
+
+    const now = audioContext.currentTime;
+
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+    voice.oscillator.onended = () => {
+    activeVoices.delete(midi);
+};
+
+voice.oscillator.stop(now + 0.12);
+
+}
+
 window.addEventListener('load', () => {
   pianoCanvas = document.getElementById('piano-canvas');
   pianoCtx    = pianoCanvas.getContext('2d');
@@ -732,13 +824,17 @@ function onMidiMessage(msg) {
 // ── NOTES ON/OFF ──
 function onNoteOn(midi, velocity = 80, source = 'unknown') {
   activeKeys.add(midi);
-  if (soundEnabled && typeof playNote === "function") {
-    playNote(midi, velocity);
+  if (soundEnabled) {
+    if (typeof playNote === "function") {
+        playNote(midi, velocity);
+    } else {
+        console.warn("playNote() absente : moteur audio non chargé.");
+    }
 }
   drawPiano();
   spawnLiveNote(midi, source);
   if (isRecording) {
-    recOpenNotes[midi] = performance.now() - recStartTime;
+    recOpenNotes[midi] = getSongTime();
     recNotesEl.textContent = (Object.keys(recOpenNotes).length + recNotes.length) + ' notes';
   }
   if (scoreEnabled && playing) checkScoreHit(midi);
@@ -746,10 +842,20 @@ function onNoteOn(midi, velocity = 80, source = 'unknown') {
 
 function onNoteOff(midi) {
   activeKeys.delete(midi);
+
+if (soundEnabled) {
+    stopNote(midi);
+}
   drawPiano();
   releaseLiveNote(midi);
   if (isRecording && recOpenNotes[midi] != null) {
-    recNotes.push({ midi, startTime: recOpenNotes[midi], endTime: performance.now() - recStartTime });
+    const endTime = getSongTime();
+
+recNotes.push({
+    midi,
+    startTime: recOpenNotes[midi],
+    endTime
+});
     delete recOpenNotes[midi];
     recNotesEl.textContent = recNotes.length + ' notes';
   }
