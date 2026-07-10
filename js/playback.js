@@ -210,8 +210,43 @@ function stopSong() {
   noteBlocks.forEach(b => b.el.remove());
   noteBlocks = [];
   for (const midi in liveNoteBlocks) {
-    liveNoteBlocks[midi].el.remove();
+
+  const live = liveNoteBlocks[midi];
+
+  const note = noteLayout.find(n => n.midi == midi);
+  if (!note) continue;
+
+  const elapsed = Math.max(0, songTime - live.startTime);
+
+  if (!live.released) {
+
+    const height = Math.max(4, elapsed * PIXELS_PER_SECOND);
+
+    live.el.style.height = height + "px";
+    live.el.style.top = (fallH - height) + "px";
+
+  } else {
+
+    const releaseElapsed = Math.max(0, songTime - live.releaseTime);
+
+    const top = fallH - releaseElapsed * PIXELS_PER_SECOND;
+
+    const remainingHeight = Math.max(
+      0,
+      elapsed * PIXELS_PER_SECOND - releaseElapsed * PIXELS_PER_SECOND
+    );
+
+    live.el.style.top = top + "px";
+    live.el.style.height = remainingHeight + "px";
+
+    if (remainingHeight <= 0) {
+      live.el.remove();
+      delete liveNoteBlocks[midi];
+    }
+
   }
+
+}
   liveNoteBlocks = {};
   activeKeys.clear();
   activeTouches = {};

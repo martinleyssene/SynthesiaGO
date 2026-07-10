@@ -675,7 +675,6 @@ gain.gain.linearRampToValueAtTime(
 function stopNote(midi) {
 
     const voice = activeVoices.get(midi);
-
     if (!voice) return;
 
     const now = audioContext.currentTime;
@@ -684,11 +683,14 @@ function stopNote(midi) {
     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
     voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
 
-    voice.oscillator.onended = () => {
+    // On retire immédiatement la voix de la Map
     activeVoices.delete(midi);
-};
 
-voice.oscillator.stop(now + 0.12);
+    try {
+        voice.oscillator.stop(now + 0.12);
+    } catch (e) {
+        // Oscillateur déjà arrêté
+    }
 
 }
 
