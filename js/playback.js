@@ -9,6 +9,10 @@ function getSongTime() {
   return (performance.now() - songStartTime) / 1000 / speedFactor;
 }
 
+function getLiveTime() {
+  return performance.now() / 1000;
+}
+
 /**
  * ═══════════════════════════════════════════════════════════════════
  * CALCUL UNIFIÉ DE POSITION VERTICALE - FORMULE MATHÉMATIQUE UNIQUE
@@ -61,7 +65,7 @@ function spawnNote(midi, hand = 'right', durationSec = 0.3) {
   el.style.height = noteHeight + 'px';
   el.textContent = NOTE_NAMES[note.n];
   fallZone.appendChild(el);
-  const songTime = getSongTime();
+  const songTime = getLiveTime();
   noteBlocks.push({ 
     el, midi, hand, 
     startTime: songTime, 
@@ -137,60 +141,107 @@ function loop(ts) {
     }
   }
 
+  
   // ── NOTES EN DIRECT (Enregistrement / Jeu temps réel) ──
-  const liveMidis = Object.keys(liveNoteBlocks);
-  for (const midi of liveMidis) {
+const liveMidis = Object.keys(liveNoteBlocks);
+
+for (const midi of liveMidis) {
+
     const live = liveNoteBlocks[midi];
+
     if (!live) continue;
 
-    const y = getNoteScreenY(songTime, live, fallH, PIXELS_PER_SECOND);
-    
+    const now = getLiveTime();
+
     if (!live.released) {
-      // Note en cours : hauteur s'étire depuis le bas
-      const height = Math.max(4, (songTime - live.startTime) * PIXELS_PER_SECOND);
-      live.el.style.height = height + 'px';
+
+        const height =
+            Math.max(4, (now - live.startTime) * PIXELS_PER_SECOND);
+
+        live.el.style.height = height + "px";
+
+        live.el.style.top =
+            (fallH - height) + "px";
+
+    } else {
+
+        const elapsed =
+            now - live.releaseTime;
+
+        const top =
+            (fallH - live.releaseHeight)
+            - (elapsed * PIXELS_PER_SECOND);
+
+        live.el.style.height =
+            live.releaseHeight + "px";
+
+        live.el.style.top =
+            top + "px";
+
+        if (top + live.releaseHeight < 0) {
+
+            live.el.remove();
+
+            delete liveNoteBlocks[midi];
+
+        }
+
     }
-    
-    live.el.style.top = y + 'px';
-    
-    if (y < -20) {
-      live.el.remove();
-      delete liveNoteBlocks[midi];
-    }
-  }
+
+}
 }
 
 function spawnLiveNote(midi, source) {
-  if (liveNoteBlocks[midi]) {
-    liveNoteBlocks[midi].el.remove();
-    delete liveNoteBlocks[midi];
-  }
-  const note = noteLayout.find(n => n.midi === midi);
-  if (!note) return;
-  const hand = (midi < 60 ? 'left' : 'right');
-  const el = document.createElement('div');
-  el.className = 'note-block ' + hand + ' live-note';
-  el.style.left = note.x + 2 + 'px';
-  el.style.width = note.w - 4 + 'px';
-  el.style.height = '4px';
-  el.textContent = NOTE_NAMES[note.n];
-  fallZone.appendChild(el);
-  const songTime = getSongTime();
-  liveNoteBlocks[midi] = { 
-    el, midi, 
-    startTime: songTime, 
-    releaseTime: null,
-    liveActive: true,
-    released: false 
-  };
+
+    const note = noteLayout.find(n => n.midi === midi);
+
+    if (!note) return;
+
+
+    const hand = midi < 60 ? "left" : "right";
+
+    const el = document.createElement("div");
+
+    el.className = "note-block " + hand + " live-note";
+
+    el.style.left = (note.x + 2) + "px";
+    el.style.width = (note.w - 4) + "px";
+    el.style.height = "4px";
+
+    el.textContent = NOTE_NAMES[note.n];
+
+    fallZone.appendChild(el);
+
+    liveNoteBlocks[midi] = {
+
+        midi,
+
+        el,
+
+        startTime: getLiveTime(),
+
+        releaseTime: null,
+
+        released: false
+
+    };
+
 }
 
 function releaseLiveNote(midi) {
-  const live = liveNoteBlocks[midi];
-  if (!live) return;
-  live.releaseTime = getSongTime();
-  live.released = true;
-  live.liveActive = false;
+
+    const live = liveNoteBlocks[midi];
+
+    if (!live) return;
+
+    if (live.released) return;
+
+    live.released = true;
+
+    live.releaseTime = getLiveTime();
+
+    live.releaseHeight = parseFloat(live.el.style.height) || 4;
+
 }
 
 function startSong() {
@@ -210,44 +261,10 @@ function stopSong() {
   noteBlocks.forEach(b => b.el.remove());
   noteBlocks = [];
   for (const midi in liveNoteBlocks) {
-
-  const live = liveNoteBlocks[midi];
-
-  const note = noteLayout.find(n => n.midi == midi);
-  if (!note) continue;
-
-  const elapsed = Math.max(0, songTime - live.startTime);
-
-  if (!live.released) {
-
-    const height = Math.max(4, elapsed * PIXELS_PER_SECOND);
-
-    live.el.style.height = height + "px";
-    live.el.style.top = (fallH - height) + "px";
-
-  } else {
-
-    const releaseElapsed = Math.max(0, songTime - live.releaseTime);
-
-    const top = fallH - releaseElapsed * PIXELS_PER_SECOND;
-
-    const remainingHeight = Math.max(
-      0,
-      elapsed * PIXELS_PER_SECOND - releaseElapsed * PIXELS_PER_SECOND
-    );
-
-    live.el.style.top = top + "px";
-    live.el.style.height = remainingHeight + "px";
-
-    if (remainingHeight <= 0) {
-      live.el.remove();
-      delete liveNoteBlocks[midi];
-    }
-
-  }
-
+    liveNoteBlocks[midi].el.remove();
 }
-  liveNoteBlocks = {};
+
+liveNoteBlocks = {};
   activeKeys.clear();
   activeTouches = {};
   drawPiano();
