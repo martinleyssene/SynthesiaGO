@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Piano Synthesia</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: #0a0a0f;
+    font-family: 'Segoe UI', sans-serif;
+    color: #ccc;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #13131a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  #toolbar h1 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-right: 4px;
+  }
+
+  .sep { width: 1px; height: 22px; background: #333; margin: 0 4px; }
+
+  .btn {
+    padding: 5px 12px;
+    border: 1px solid #333;
+    background: #1e1e2e;
+    color: #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:hover { background: #2a2a3e; color: #fff; }
+  .btn.active { background: #3a3a5e; border-color: #6666cc; color: #fff; }
+  .btn.rec { border-color: #cc3333; }
+  .btn.rec.active { background: #3e1e1e; border-color: #ff4444; color: #ff8888; }
+  .btn.green { border-color: #44aa44; }
+  .btn.green:hover { background: #1e3e1e; color: #88ff88; }
+
+  #midi-label {
+    padding: 5px 12px;
+    border: 1px dashed #444;
+    background: #111;
+    color: #888;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  #midi-label:hover { background: #1a1a2a; color: #bbb; }
+  #midi-file { display: none; }
+
+  #status {
+    font-size: 11px;
+    color: #666;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  #midi-device {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid #333;
+    background: #111;
+    color: #888;
+    white-space: nowrap;
+  }
+  #midi-device.connected { border-color: #44aa44; color: #88dd88; }
+
+  #speed { width: 80px; accent-color: #8888ee; }
+
+  #score-panel {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    background: #00000099;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    z-index: 20;
+  }
+  #score-panel.visible { display: flex; }
+  #score-val { font-size: 22px; font-weight: 700; color: #fff; }
+  #score-streak { color: #ffcc44; font-size: 11px; }
+  #score-acc { color: #88aaff; font-size: 11px; }
+
+  #debug-panel {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    background: #0a0a0f;
+    border: 2px solid #00ff00;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 25;
+    color: #00ff00;
+    box-shadow: 0 0 12px #00ff0055;
+  }
+  #debug-panel.visible { display: flex; }
+  .debug-line { white-space: nowrap; }
+  .debug-label { color: #88ff88; font-weight: bold; }
+
+  #fall-zone {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #0a0a0f;
+  }
+
+  #fall-zone::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #cc3333 20%, #cc3333 80%, transparent);
+    box-shadow: 0 0 12px #cc3333;
+    z-index: 10;
+  }
+
+  #grid-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .note-block {
+    position: absolute;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 3px;
+    pointer-events: none;
+  }
+  .note-block.left {
+    background: linear-gradient(180deg, #e8e800 0%, #a0a000 100%);
+    color: #333;
+    box-shadow: 0 0 8px #dddd00aa;
+  }
+  .note-block.right {
+    background: linear-gradient(180deg, #e83060 0%, #a01040 100%);
+    color: #ffe0e0;
+    box-shadow: 0 0 8px #e8306088;
+  }
+  .note-block.recorded {
+    background: linear-gradient(180deg, #44ddff 0%, #0088aa 100%);
+    color: #003344;
+    box-shadow: 0 0 8px #44ddffaa;
+  }
+  .note-block.hit { filter: brightness(1.6); }
+  .note-block.miss { opacity: 0.35; }
+
+  .hit-flash {
+    position: absolute;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffee44;
+    text-shadow: 0 0 8px #ffee44;
+    pointer-events: none;
+    animation: floatUp .7s ease forwards;
+    z-index: 30;
+  }
+  @keyframes floatUp {
+    0%   { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+
+  #piano-wrapper {
+    flex-shrink: 0;
+    background: #111;
+    border-top: 2px solid #222;
+    overflow: hidden;
+    position: relative;
+    touch-action: none;
+  }
+  #piano-canvas {
+    display: block;
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  #legend {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    background: #00000088;
+    padding: 6px 10px;
+    border-radius: 6px;
+    z-index: 20;
+  }
+  .leg { display: flex; align-items: center; gap: 5px; }
+  .leg-dot { width: 11px; height: 11px; border-radius: 3px; }
+  .leg-left  { background: #e8e800; }
+  .leg-right { background: #e83060; }
+  .leg-rec   { background: #44ddff; }
+
+  #rec-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000000cc;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #rec-modal.visible { display: flex; }
+  #rec-box {
+    background: #1a1a2a;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 28px 36px;
+    text-align: center;
+    max-width: 340px;
+  }
+  #rec-box h2 { font-size: 16px; margin-bottom: 10px; color: #fff; }
+  #rec-box p  { font-size: 13px; color: #888; margin-bottom: 18px; }
+  #rec-timer  { font-size: 36px; font-weight: 700; color: #ff4444; margin-bottom: 18px; }
+  #rec-notes-count { font-size: 12px; color: #44ddff; margin-bottom: 18px; }
+  .modal-btns { display: flex; gap: 10px; justify-content: center; }
+
+  /* ── BIBLIOTHEQUE ── */
+  #library-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000000cc;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #library-modal.visible { display: flex; }
+  #library-box {
+    background: #1a1a2a;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 20px 24px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #library-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  #library-header h2 { font-size: 16px; color: #fff; }
+  #library-list {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lib-item {
+    background: #14141e;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lib-item-name {
+    font-size: 13px;
+    color: #fff;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed #444;
+    padding: 2px 0;
+    width: 100%;
+  }
+  .lib-item-meta {
+    font-size: 11px;
+    color: #777;
+  }
+  .lib-item-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .lib-item-btns .btn { font-size: 11px; padding: 4px 8px; }
+  #library-empty {
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+    padding: 30px 0;
+  }
+
+  /* ── ÉDITEUR DE NOTES ── */
+  #editor-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0a0a0f;
+    z-index: 200;
+    flex-direction: column;
+  }
+  #editor-modal.visible { display: flex; }
+
+  #editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #13131a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  #editor-toolbar h2 { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-right: 4px; }
+
+  #editor-zone {
+    flex: 1;
+    position: relative;
+    overflow: auto;
+    background: #0a0a0f;
+    cursor: default;
+  }
+
+  #editor-canvas {
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  .editor-note {
+    position: absolute;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: filter .1s;
+  }
+  .editor-note:hover { filter: brightness(1.3); }
+  .editor-note.selected {
+    outline: 2px solid #fff;
+    outline-offset: 1px;
+    filter: brightness(1.4);
+  }
+
+  #color-picker-panel {
+    display: none;
+    position: fixed;
+    background: #1a1a2a;
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 12px;
+    z-index: 300;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 180px;
+    box-shadow: 0 4px 20px #000a;
+  }
+  #color-picker-panel.visible { display: flex; }
+  .color-swatch {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform .1s, border-color .1s;
+  }
+  .color-swatch:hover { transform: scale(1.15); border-color: #fff; }
+  #custom-color-wrap { display: flex; align-items: center; gap: 6px; width: 100%; }
+  #custom-color { width: 36px; height: 28px; border: none; border-radius: 4px; cursor: pointer; background: none; padding: 0; }
+  #custom-color-label { font-size: 11px; color: #aaa; }
+
+  #editor-piano {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    flex-shrink: 0;
+    background: #111;
+    border-top: 2px solid #222;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>🎹 Piano</h1>
+  <div class="sep"></div>
+
+  <div id="midi-device">🎹 Non connecté</div>
+  <button class="btn" id="btn-connect-midi">Connecter Roland</button>
+
+  <div class="sep"></div>
+
+  <button class="btn" id="btn-play">▶ Jouer</button>
+  <button class="btn" id="btn-stop">■ Stop</button>
+  <button class="btn" id="btn-demo">🎵 Démo</button>
+  <label id="midi-label">📂 MIDI
+    <input type="file" id="midi-file" accept=".mid,.midi">
+  </label>
+
+  <div class="sep"></div>
+
+  <button class="btn rec" id="btn-rec">⏺ Enregistrer</button>
+  <button class="btn green" id="btn-playback" style="display:none">▶ Réécouter</button>
+  <button class="btn" id="btn-library">📁 Mes enregistrements</button>
+
+  <div class="sep"></div>
+
+  <button class="btn" id="btn-score">🎯 Score</button>
+  <button class="btn" id="btn-mute">🔇 Son OFF</button>
+
+  <div class="sep"></div>
+
+  <span style="font-size:11px;color:#888">Vitesse</span>
+  <input type="range" id="speed" min="0.3" max="2" step="0.05" value="1">
+  <span id="speed-val" style="font-size:11px;color:#aaa">×1.0</span>
+
+  <span id="status">Prêt</span>
+</div>
+
+<div id="fall-zone">
+  <canvas id="grid-canvas"></canvas>
+  <div id="debug-panel">
+    <div id="debug-fps" class="debug-line"><span class="debug-label">FPS:</span> <span id="debug-fps-val">--</span></div>
+    <div id="debug-time" class="debug-line"><span class="debug-label">Time:</span> <span id="debug-time-val">0.00</span>s</div>
+    <div id="debug-speed" class="debug-line"><span class="debug-label">Speed:</span> <span id="debug-speed-val">0</span> px/s</div>
+    <div id="debug-notes" class="debug-line"><span class="debug-label">Notes:</span> <span id="debug-notes-val">0</span></div>
+  </div>
+  <div id="score-panel">
+    <div id="score-val">0</div>
+    <div id="score-streak">Série : 0</div>
+    <div id="score-acc">Précision : —</div>
+  </div>
+  <div id="legend">
+    <div class="leg"><div class="leg-dot leg-left"></div> Gauche</div>
+    <div class="leg"><div class="leg-dot leg-right"></div> Droite</div>
+    <div class="leg"><div class="leg-dot leg-rec"></div> Enregistré</div>
+  </div>
+</div>
+
+<div id="piano-wrapper">
+  <canvas id="piano-canvas"></canvas>
+</div>
+
+<!-- MODAL BIBLIOTHEQUE -->
+<div id="library-modal">
+  <div id="library-box">
+    <div id="library-header">
+      <h2>📁 Mes enregistrements</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label id="btn-import-label" class="btn" style="cursor:pointer">⬆ Importer
+          <input type="file" id="import-file" accept=".json" style="display:none">
+        </label>
+        <button class="btn" id="btn-close-library">✕ Fermer</button>
+      </div>
+    </div>
+    <div id="library-list"></div>
+  </div>
+</div>
+
+<!-- ÉDITEUR DE NOTES -->
+<div id="editor-modal">
+  <div id="editor-toolbar">
+    <h2>✏️ Éditeur</h2>
+    <span id="editor-rec-name" style="font-size:12px;color:#aaa;margin-right:8px"></span>
+    <div class="sep"></div>
+    <button class="btn" id="btn-editor-select-all">Tout sélectionner</button>
+    <button class="btn" id="btn-editor-deselect">Désélectionner</button>
+    <button class="btn" id="btn-editor-color">🎨 Couleur</button>
+    <div class="sep"></div>
+    <button class="btn green" id="btn-editor-save">💾 Sauvegarder</button>
+    <button class="btn" id="btn-editor-close">✕ Fermer</button>
+    <span id="editor-status" style="font-size:11px;color:#666;margin-left:auto"></span>
+  </div>
+  <div id="editor-zone">
+    <canvas id="editor-canvas"></canvas>
+  </div>
+  <div id="editor-piano">
+    <canvas id="editor-piano-canvas"></canvas>
+  </div>
+</div>
+
+<!-- COLOR PICKER -->
+<div id="color-picker-panel">
+  <div class="color-swatch" style="background:#e8e800" data-color="#e8e800"></div>
+  <div class="color-swatch" style="background:#e83060" data-color="#e83060"></div>
+  <div class="color-swatch" style="background:#44ddff" data-color="#44ddff"></div>
+  <div class="color-swatch" style="background:#44ee88" data-color="#44ee88"></div>
+  <div class="color-swatch" style="background:#ff8800" data-color="#ff8800"></div>
+  <div class="color-swatch" style="background:#aa44ff" data-color="#aa44ff"></div>
+  <div class="color-swatch" style="background:#ff4444" data-color="#ff4444"></div>
+  <div class="color-swatch" style="background:#ffffff" data-color="#ffffff"></div>
+  <div id="custom-color-wrap">
+    <input type="color" id="custom-color" value="#44ddff">
+    <span id="custom-color-label">Couleur personnalisée</span>
+  </div>
+</div>
+
+<div id="rec-modal">
+  <div id="rec-box">
+    <h2>⏺ Enregistrement en cours</h2>
+    <p>Joue sur ton Roland — chaque note est capturée.</p>
+    <div id="rec-timer">0:00</div>
+    <div id="rec-notes-count">0 notes enregistrées</div>
+    <div class="modal-btns">
+      <button class="btn rec active" id="btn-stop-rec">■ Arrêter</button>
+      <button class="btn" id="btn-cancel-rec">Annuler</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const START_OCTAVE = 2;
+const NUM_OCTAVES  = 5;
+const PIANO_H      = 140;
+const FALL_SPEED   = 200;
+const NOTE_NAMES   = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SCORE_WINDOW = 0.25;
+
+const KEY_MAP = {
+  'a':48,'z':49,'e':50,'r':51,'t':52,'y':53,'u':54,'i':55,'o':56,'p':57,
+  'q':60,'s':61,'d':62,'f':63,'g':64,'h':65,'j':66,'k':67,'l':68,'m':69,
+};
+
+let pianoCanvas, pianoCtx, gridCanvas, gridCtx, fallZone;
+let whiteW, blackW, blackH;
+let totalWhites, noteLayout = [];
+let activeKeys     = new Set();
+let liveNoteBlocks = {}; // midi → { el, startTime }
+let noteBlocks     = [];
+let lastTime       = null;
+let playing        = false;
+let scheduledEvents = [];
+let songStartTime   = null;
+let speedFactor     = 1;
+let soundEnabled    = true;
+
+let midiAccess  = null;
+let rolandInput = null;
+
+let isRecording   = false;
+let recStartTime  = null;
+let recNotes      = [];
+let recOpenNotes  = {};
+let recTimerEl, recNotesEl, recInterval;
+let recordedSong  = null;
+
+let scoreEnabled    = false;
+let scoreTotal      = 0;
+let scoreHits       = 0;
+let scoreMisses     = 0;
+let scoreStreak     = 0;
+let scoreBestStreak = 0;
+
+// Suivi des doigts actifs sur le clavier tactile
+let activeTouches = {}; // touchId → midi
+
+// ===== V1.3A Audio Engine =====
+
+let audioContext = null;
+let masterGain = null;
+
+const activeVoices = new Map();
+
+function ensureAudioContext() {
+
+    if (!audioContext) {
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = 0.25;
+        masterGain.connect(audioContext.destination);
+
+    }
+
+    if (audioContext.state === "suspended") {
+    audioContext.resume().catch(err => {
+        console.warn("Impossible de reprendre AudioContext :", err);
+    });
+}
+
+}
+
+function midiToFrequency(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playNote(midi, velocity = 80) {
+
+    ensureAudioContext();
+
+if (!audioContext || audioContext.state !== "running") {
+    return;
+}
+
+    // Évite les doublons sur la même note
+    stopNote(midi);
+
+    const osc = audioContext.createOscillator();
+const gain = audioContext.createGain();
+
+osc.type = "triangle";
+osc.frequency.setValueAtTime(
+    midiToFrequency(midi),
+    audioContext.currentTime
+);
+
+const volume = Math.max(0.02, Math.min(velocity / 127, 1));
+
+gain.gain.cancelScheduledValues(audioContext.currentTime);
+gain.gain.setValueAtTime(0, audioContext.currentTime);
+gain.gain.linearRampToValueAtTime(
+    volume * 0.18,
+    audioContext.currentTime + 0.01
+);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+
+    osc.start();
+
+    activeVoices.set(midi, {
+        oscillator: osc,
+        gain: gain
+    });
+
+}
+
+function stopNote(midi) {
+
+    const voice = activeVoices.get(midi);
+    if (!voice) return;
+
+    const now = audioContext.currentTime;
+
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+    // On retire immédiatement la voix de la Map
+    activeVoices.delete(midi);
+
+    try {
+        voice.oscillator.stop(now + 0.12);
+    } catch (e) {
+        // Oscillateur déjà arrêté
+    }
+
+}
+
+window.addEventListener('load', () => {
+  pianoCanvas = document.getElementById('piano-canvas');
+  pianoCtx    = pianoCanvas.getContext('2d');
+  gridCanvas  = document.getElementById('grid-canvas');
+  gridCtx     = gridCanvas.getContext('2d');
+  fallZone    = document.getElementById('fall-zone');
+  recTimerEl  = document.getElementById('rec-timer');
+  recNotesEl  = document.getElementById('rec-notes-count');
+
+  buildLayout();
+  resizeAll();
+  window.addEventListener('resize', resizeAll);
+
+  initKeyboardControls();
+
+  // Boutons
+  document.getElementById('btn-connect-midi').addEventListener('click', connectMidi);
+  console.log("typeof startSong =", typeof startSong);
+  document.getElementById('btn-play').addEventListener('click', startSong);
+  document.getElementById('btn-stop').addEventListener('click', stopSong);
+  document.getElementById('btn-demo').addEventListener('click', runDemo);
+  document.getElementById('btn-rec').addEventListener('click', startRecording);
+  document.getElementById('btn-stop-rec').addEventListener('click', stopRecording);
+  document.getElementById('btn-cancel-rec').addEventListener('click', cancelRecording);
+  document.getElementById('btn-playback').addEventListener('click', playbackRecording);
+  document.getElementById('btn-library').addEventListener('click', openLibrary);
+  document.getElementById('btn-close-library').addEventListener('click', closeLibrary);
+  document.getElementById('import-file').addEventListener('change', importRecording);
+  document.getElementById('btn-score').addEventListener('click', toggleScore);
+  document.getElementById('midi-file').addEventListener('change', loadMidi);
+
+  // Éditeur
+  document.getElementById('btn-editor-close').addEventListener('click', closeEditor);
+  document.getElementById('btn-editor-save').addEventListener('click', saveEditor);
+  document.getElementById('btn-editor-select-all').addEventListener('click', () => {
+    editorNotes.forEach((_, i) => editorSelected.add(i));
+    drawEditor();
+  });
+  document.getElementById('btn-editor-deselect').addEventListener('click', () => {
+    editorSelected.clear(); drawEditor();
+  });
+  document.getElementById('btn-editor-color').addEventListener('click', e => {
+    if (editorSelected.size === 0) {
+      document.getElementById('editor-status').textContent = 'Sélectionne des notes d\'abord';
+      setTimeout(() => { document.getElementById('editor-status').textContent = ''; }, 2000);
+      return;
+    }
+    showColorPicker(e);
+  });
+
+  // Swatches couleur
+  document.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.addEventListener('click', () => applyColor(sw.dataset.color));
+  });
+  document.getElementById('custom-color').addEventListener('input', e => {
+    applyColor(e.target.value);
+  });
+
+  // Fermer color picker en cliquant ailleurs
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('color-picker-panel');
+    if (!panel.contains(e.target) && e.target.id !== 'btn-editor-color') {
+      hideColorPicker();
+    }
+  });
+
+  document.getElementById('btn-mute').addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    const btn = document.getElementById('btn-mute');
+    btn.textContent = soundEnabled ? '🔇 Son OFF' : '🔊 Son ON';
+    btn.classList.toggle('active', !soundEnabled);
+  });
+
+  document.getElementById('speed').addEventListener('input', e => {
+    speedFactor = parseFloat(e.target.value);
+    document.getElementById('speed-val').textContent = '×' + speedFactor.toFixed(1);
+  });
+
+  // Init events éditeur canvas (une fois le DOM prêt)
+  setTimeout(initEditorEvents, 100);
+
+  requestAnimationFrame(loop);
+});
+
+// ── MIDI ──
+async function connectMidi() {
+  if (!navigator.requestMIDIAccess) {
+    setStatus('❌ Web MIDI non supporté');
+    return;
+  }
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    scanMidiInputs();
+    midiAccess.onstatechange = scanMidiInputs;
+    setStatus('✅ MIDI initialisé');
+  } catch(err) {
+    setStatus('❌ Accès MIDI refusé : ' + err.message);
+  }
+}
+
+function scanMidiInputs() {
+  const devEl = document.getElementById('midi-device');
+  rolandInput = null;
+  try {
+    const inputs = Array.from(midiAccess.inputs.values());
+    if (inputs.length === 0) {
+      devEl.textContent = '🎹 Aucun clavier';
+      devEl.className = '';
+      setStatus('Aucun clavier détecté');
+      return;
+    }
+    inputs.forEach(input => {
+      rolandInput = input;
+      input.onmidimessage = onMidiMessage;
+      devEl.textContent = '🎹 ' + input.name;
+      devEl.className = 'connected';
+      setStatus('✅ ' + input.name + ' connecté');
+    });
+  } catch(err) {
+    setStatus('❌ Erreur : ' + err.message);
+  }
+}
+
+function onMidiMessage(msg) {
+  const [status, note, velocity] = msg.data;
+  const type = status & 0xf0;
+  if (type === 0x90 && velocity > 0) onNoteOn(note, velocity, 'roland');
+  else if (type === 0x80 || (type === 0x90 && velocity === 0)) onNoteOff(note);
+}
+
+// ── NOTES ON/OFF ──
+function onNoteOn(midi, velocity = 80, source = 'unknown') {
+  activeKeys.add(midi);
+  if (soundEnabled) {
+    if (typeof playNote === "function") {
+        playNote(midi, velocity);
+    } else {
+        console.warn("playNote() absente : moteur audio non chargé.");
+    }
+}
+  drawPiano();
+  spawnLiveNote(midi, source);
+  if (isRecording) {
+    recOpenNotes[midi] = getSongTime();
+    recNotesEl.textContent = (Object.keys(recOpenNotes).length + recNotes.length) + ' notes';
+  }
+  if (scoreEnabled && playing) checkScoreHit(midi);
+}
+
+function onNoteOff(midi) {
+  activeKeys.delete(midi);
+
+if (soundEnabled) {
+    stopNote(midi);
+}
+  drawPiano();
+  releaseLiveNote(midi);
+  if (isRecording && recOpenNotes[midi] != null) {
+    const endTime = getSongTime();
+
+recNotes.push({
+    midi,
+    startTime: recOpenNotes[midi],
+    endTime
+});
+    delete recOpenNotes[midi];
+    recNotesEl.textContent = recNotes.length + ' notes';
+  }
+}
+
+// ── NOTES EN DIRECT (s'étirent tant que la touche est maintenue) ──
+function spawnLiveNote(midi, source) {
+
+    const note = noteLayout.find(n => n.midi === midi);
+
+    if (!note) return;
+
+    const hand = midi < 60 ? "left" : "right";
+
+    const el = document.createElement("div");
+
+    el.className = "note-block " + hand + " live-note";
+
+    el.style.left = (note.x + 2) + "px";
+    el.style.width = (note.w - 4) + "px";
+    el.style.height = "4px";
+
+    const fallH = fallZone.offsetHeight;
+    el.style.top = (fallH - 4) + "px";
+
+    el.textContent = NOTE_NAMES[note.n];
+
+    fallZone.appendChild(el);
+
+    liveNotes.push({
+
+        id: nextLiveNoteId++,
+
+        midi,
+
+        el,
+
+        startTime: getLiveTime(),
+
+        released: false,
+
+        releaseTime: null,
+
+        releaseHeight: 4
+
+    });
+
+}
+
+function releaseLiveNote(midi) {
+
+    for (let i = liveNotes.length - 1; i >= 0; i--) {
+
+        const note = liveNotes[i];
+
+        if (note.midi !== midi) continue;
+
+        if (note.released) continue;
+
+        note.released = true;
+
+        note.releaseTime = getLiveTime();
+
+        note.releaseHeight =
+            parseFloat(note.el.style.height) || 4;
+
+        return;
+    }
+
+}
+
+// ── SCORE ──
+function toggleScore() {
+  scoreEnabled = !scoreEnabled;
+  document.getElementById('btn-score').classList.toggle('active', scoreEnabled);
+  document.getElementById('score-panel').classList.toggle('visible', scoreEnabled);
+  if (scoreEnabled) resetScore();
+}
+
+function resetScore() {
+  scoreTotal = scoreHits = scoreMisses = scoreStreak = scoreBestStreak = 0;
+  updateScoreUI();
+}
+
+function updateScoreUI() {
+  document.getElementById('score-val').textContent = scoreHits * 10;
+  document.getElementById('score-streak').textContent = 'Série : ' + scoreStreak + (scoreBestStreak > 3 ? ' (max ' + scoreBestStreak + ')' : '');
+  const acc = scoreTotal > 0 ? Math.round(scoreHits / scoreTotal * 100) : 0;
+  document.getElementById('score-acc').textContent = 'Précision : ' + acc + '%';
+}
+
+function checkScoreHit(playedMidi) {
+  const fallH = fallZone.offsetHeight;
+  const tolerance = FALL_SPEED * speedFactor * SCORE_WINDOW;
+  let best = null, bestDist = Infinity;
+  for (const b of noteBlocks) {
+    if (b.midi !== playedMidi) continue;
+    const bottom = b.top + parseFloat(b.el.style.height);
+    const dist = Math.abs(bottom - fallH);
+    if (dist < tolerance && dist < bestDist) { best = b; bestDist = dist; }
+  }
+  scoreTotal++;
+  if (best) {
+    scoreHits++; scoreStreak++;
+    if (scoreStreak > scoreBestStreak) scoreBestStreak = scoreStreak;
+    best.el.classList.add('hit');
+    showHitFlash(best);
+  } else { scoreMisses++; scoreStreak = 0; }
+  updateScoreUI();
+}
+
+function showHitFlash(block) {
+  const note = noteLayout.find(n => n.midi === block.midi);
+  if (!note) return;
+  const el = document.createElement('div');
+  el.className = 'hit-flash';
+  el.style.left = (note.x + note.w / 2 - 20) + 'px';
+  el.style.bottom = '20px';
+  el.textContent = scoreStreak > 5 ? '🔥 PARFAIT!' : '✓';
+  fallZone.appendChild(el);
+  setTimeout(() => el.remove(), 750);
+}
+
+// ── ENREGISTREMENT ──
+function startRecording() {
+  if (isRecording) return;
+  isRecording = true;
+  recStartTime = performance.now();
+  recNotes = []; recOpenNotes = {};
+  document.getElementById('rec-modal').classList.add('visible');
+  document.getElementById('btn-rec').classList.add('active');
+  let secs = 0;
+  recInterval = setInterval(() => {
+    secs++;
+    const m = Math.floor(secs / 60), s = secs % 60;
+    recTimerEl.textContent = m + ':' + String(s).padStart(2, '0');
+  }, 1000);
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  clearInterval(recInterval);
+  document.getElementById('rec-modal').classList.remove('visible');
+  document.getElementById('btn-rec').classList.remove('active');
+  const now = performance.now() - recStartTime;
+  for (const [midi, start] of Object.entries(recOpenNotes)) {
+    recNotes.push({ midi: parseInt(midi), startTime: start, endTime: now });
+  }
+  recOpenNotes = {};
+  if (recNotes.length === 0) { setStatus('Aucune note enregistrée'); return; }
+  recordedSong = recNotes.map(n => ({
+    time: n.startTime / 1000, midi: n.midi,
+    duration: (n.endTime - n.startTime) / 1000, hand: 'recorded',
+  })).sort((a, b) => a.time - b.time);
+  document.getElementById('btn-playback').style.display = '';
+  saveRecordingToLibrary(recordedSong);
+  setStatus('✅ ' + recNotes.length + ' notes — sauvegardé dans Mes enregistrements');
+}
+
+function cancelRecording() {
+  isRecording = false; clearInterval(recInterval);
+  recNotes = []; recOpenNotes = {};
+  document.getElementById('rec-modal').classList.remove('visible');
+  document.getElementById('btn-rec').classList.remove('active');
+}
+
+function playbackRecording() {
+  if (!recordedSong) return;
+  stopSong();
+  scheduledEvents = [...recordedSong];
+  const fallDelay = fallZone.offsetHeight / (FALL_SPEED * speedFactor);
+  songStartTime = performance.now() + fallDelay * 1000;
+  scheduledEvents = scheduledEvents.map(ev => ({ ...ev, time: ev.time + fallDelay / speedFactor }));
+  playing = true;
+  setStatus('▶ Relecture de ton enregistrement');
+}
+
+// ══════════════════════════════════════════════════
+// BIBLIOTHEQUE D'ENREGISTREMENTS (localStorage)
+// ══════════════════════════════════════════════════
+const LIBRARY_KEY = 'piano_recordings_library';
+
+function getLibrary() {
+  try {
+    const raw = localStorage.getItem(LIBRARY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(err) {
+    return [];
+  }
+}
+
+function setLibrary(lib) {
+  try {
+    localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib));
+  } catch(err) {
+    setStatus('❌ Erreur sauvegarde : ' + err.message);
+  }
+}
+
+function saveRecordingToLibrary(song) {
+  const lib = getLibrary();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  lib.push({
+    id: 'rec_' + Date.now(),
+    name: 'Enregistrement du ' + dateStr,
+    date: now.toISOString(),
+    notesCount: song.length,
+    song: song,
+  });
+  setLibrary(lib);
+}
+
+function renderLibrary() {
+  const listEl = document.getElementById('library-list');
+  const lib = getLibrary().sort((a, b) => new Date(b.date) - new Date(a.date));
+  listEl.innerHTML = '';
+
+  if (lib.length === 0) {
+    listEl.innerHTML = '<div id="library-empty">Aucun enregistrement pour le moment.<br>Clique sur ⏺ Enregistrer pour commencer !</div>';
+    return;
+  }
+
+  lib.forEach(rec => {
+    const item = document.createElement('div');
+    item.className = 'lib-item';
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'lib-item-name';
+    nameInput.value = rec.name;
+    nameInput.addEventListener('change', () => renameRecording(rec.id, nameInput.value));
+
+    const meta = document.createElement('div');
+    meta.className = 'lib-item-meta';
+    const d = new Date(rec.date);
+    meta.textContent = d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' — ' + rec.notesCount + ' notes';
+
+    const btns = document.createElement('div');
+    btns.className = 'lib-item-btns';
+
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn green';
+    playBtn.textContent = '▶ Jouer';
+    playBtn.addEventListener('click', () => {
+      recordedSong = rec.song;
+      document.getElementById('library-modal').classList.remove('visible');
+      playbackRecording();
+    });
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'btn';
+    downloadBtn.textContent = '⬇ Télécharger';
+    downloadBtn.addEventListener('click', () => downloadRecording(rec));
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn';
+    editBtn.textContent = '✏️ Éditer';
+    editBtn.addEventListener('click', () => {
+      document.getElementById('library-modal').classList.remove('visible');
+      openEditor(rec);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn rec';
+    deleteBtn.textContent = '🗑 Supprimer';
+    deleteBtn.addEventListener('click', () => deleteRecording(rec.id));
+
+    btns.appendChild(playBtn);
+    btns.appendChild(editBtn);
+    btns.appendChild(downloadBtn);
+    btns.appendChild(deleteBtn);
+
+    item.appendChild(nameInput);
+    item.appendChild(meta);
+    item.appendChild(btns);
+    listEl.appendChild(item);
+  });
+}
+
+function renameRecording(id, newName) {
+  const lib = getLibrary();
+  const rec = lib.find(r => r.id === id);
+  if (rec) { rec.name = newName; setLibrary(lib); }
+}
+
+function deleteRecording(id) {
+  let lib = getLibrary();
+  lib = lib.filter(r => r.id !== id);
+  setLibrary(lib);
+  renderLibrary();
+}
+
+function downloadRecording(rec) {
+  const blob = new Blob([JSON.stringify(rec, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = rec.name.replace(/[^a-z0-9]/gi, '_') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function openLibrary() {
+  renderLibrary();
+  document.getElementById('library-modal').classList.add('visible');
+}
+
+function closeLibrary() {
+  document.getElementById('library-modal').classList.remove('visible');
+}
+
+async function importRecording(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const rec  = JSON.parse(text);
+
+    // Vérifier que c'est bien un enregistrement valide
+    if (!rec.song || !Array.isArray(rec.song)) {
+      alert('❌ Fichier invalide — ce n\'est pas un enregistrement piano.');
+      return;
+    }
+
+    // Si l'id existe déjà, on génère un nouvel id pour éviter les doublons
+    const lib = getLibrary();
+    if (lib.find(r => r.id === rec.id)) {
+      rec.id = 'rec_' + Date.now();
+      rec.name = rec.name + ' (importé)';
+    }
+
+    lib.push(rec);
+    setLibrary(lib);
+    renderLibrary();
+    setStatus('✅ "' + rec.name + '" importé !');
+  } catch(err) {
+    alert('❌ Erreur lors de l\'import : ' + err.message);
+  }
+  // Réinitialiser l'input pour pouvoir réimporter le même fichier
+  e.target.value = '';
+}
+
+// ══════════════════════════════════════════════════
+// ÉDITEUR DE NOTES
+// ══════════════════════════════════════════════════
+const EDITOR_ROW_H  = 18;  // hauteur d'une ligne de note (px)
+const EDITOR_PX_S   = 120; // pixels par seconde
+const EDITOR_PIANO_W = 40; // largeur de la colonne des noms de notes
+
+let editorRec        = null;  // enregistrement en cours d'édition
+let editorNotes      = [];    // copie modifiable des notes {time, midi, duration, hand, color}
+let editorSelected   = new Set();
+let editorDragging   = null;  // {noteIdx, startX, startY, origTime}
+let editorCanvas, editorCtx, editorPianoCanvas, editorPianoCtx;
+let editorZone;
+let colorPickerTarget = null; // 'selected' ou index
+
+function openEditor(rec) {
+  editorRec      = rec;
+  editorNotes    = rec.song.map(n => ({ ...n, color: n.color || null }));
+  editorSelected = new Set();
+
+  document.getElementById('editor-rec-name').textContent = rec.name;
+  document.getElementById('editor-modal').classList.add('visible');
+  document.getElementById('editor-status').textContent = '';
+
+  editorCanvas      = document.getElementById('editor-canvas');
+  editorCtx         = editorCanvas.getContext('2d');
+  editorPianoCanvas = document.getElementById('editor-piano-canvas');
+  editorPianoCtx    = editorPianoCanvas.getContext('2d');
+  editorZone        = document.getElementById('editor-zone');
+
+  initEditorCanvas();
+  drawEditor();
+}
+
+function closeEditor() {
+  document.getElementById('editor-modal').classList.remove('visible');
+  hideColorPicker();
+  editorRec = null;
+  editorNotes = [];
+  editorSelected = new Set();
+}
+
+function initEditorCanvas() {
+  const totalMidi   = NUM_OCTAVES * 12;
+  const maxTime     = Math.max(...editorNotes.map(n => n.time + n.duration), 4);
+  const W = EDITOR_PIANO_W + Math.ceil(maxTime * EDITOR_PX_S) + 80;
+  const H = totalMidi * EDITOR_ROW_H;
+
+  editorCanvas.width  = W;
+  editorCanvas.height = H;
+  editorCanvas.style.width  = W + 'px';
+  editorCanvas.style.height = H + 'px';
+
+  // Piano latéral
+  editorPianoCanvas.width  = editorZone.offsetWidth || window.innerWidth;
+  editorPianoCanvas.height = 80;
+  editorPianoCanvas.style.width  = editorPianoCanvas.width + 'px';
+  editorPianoCanvas.style.height = '80px';
+  drawEditorPiano();
+}
+
+function midiToRow(midi) {
+  // MIDI le plus haut en haut
+  const maxMidi = (START_OCTAVE + NUM_OCTAVES + 1) * 12 - 1;
+  return maxMidi - midi;
+}
+
+function drawEditor() {
+  if (!editorCtx) return;
+  const W = editorCanvas.width, H = editorCanvas.height;
+  editorCtx.clearRect(0, 0, W, H);
+
+  // Fond avec lignes de grille
+  for (let i = 0; i < NUM_OCTAVES * 12; i++) {
+    const y = i * EDITOR_ROW_H;
+    const midi = (START_OCTAVE + NUM_OCTAVES + 1) * 12 - 1 - i;
+    const isBlack = [1,3,6,8,10].includes(midi % 12);
+    editorCtx.fillStyle = isBlack ? '#0e0e16' : '#12121c';
+    editorCtx.fillRect(EDITOR_PIANO_W, y, W - EDITOR_PIANO_W, EDITOR_ROW_H);
+
+    // Ligne séparatrice
+    editorCtx.strokeStyle = '#1a1a28';
+    editorCtx.lineWidth = 1;
+    editorCtx.beginPath();
+    editorCtx.moveTo(EDITOR_PIANO_W, y);
+    editorCtx.lineTo(W, y);
+    editorCtx.stroke();
+
+    // Nom de note à gauche
+    const noteName = NOTE_NAMES[midi % 12];
+    editorCtx.fillStyle = midi % 12 === 0 ? '#ffffff55' : '#ffffff22';
+    editorCtx.font = '9px monospace';
+    editorCtx.textAlign = 'right';
+    editorCtx.fillText(noteName + (Math.floor(midi / 12) - 1), EDITOR_PIANO_W - 3, y + 13);
+  }
+
+  // Lignes de temps verticales (toutes les secondes)
+  const maxTime = (editorCanvas.width - EDITOR_PIANO_W) / EDITOR_PX_S;
+  for (let t = 0; t <= maxTime; t++) {
+    const x = EDITOR_PIANO_W + t * EDITOR_PX_S;
+    editorCtx.strokeStyle = t % 2 === 0 ? '#ffffff18' : '#ffffff08';
+    editorCtx.lineWidth = 1;
+    editorCtx.beginPath();
+    editorCtx.moveTo(x, 0);
+    editorCtx.lineTo(x, H);
+    editorCtx.stroke();
+    if (t % 2 === 0) {
+      editorCtx.fillStyle = '#ffffff33';
+      editorCtx.font = '9px monospace';
+      editorCtx.textAlign = 'left';
+      editorCtx.fillText(t + 's', x + 2, 10);
+    }
+  }
+
+  // Notes
+  editorNotes.forEach((note, idx) => {
+    const row = midiToRow(note.midi);
+    const x   = EDITOR_PIANO_W + note.time * EDITOR_PX_S;
+    const y   = row * EDITOR_ROW_H;
+    const w   = Math.max(4, note.duration * EDITOR_PX_S - 2);
+    const h   = EDITOR_ROW_H - 2;
+    const sel = editorSelected.has(idx);
+
+    // Couleur : custom > hand > défaut
+    let color;
+    if (note.color) {
+      color = note.color;
+    } else if (note.hand === 'left') {
+      color = '#e8e800';
+    } else if (note.hand === 'recorded') {
+      color = '#44ddff';
+    } else {
+      color = '#e83060';
+    }
+
+    editorCtx.fillStyle = color;
+    editorCtx.globalAlpha = sel ? 1 : 0.85;
+    editorCtx.beginPath();
+    editorCtx.roundRect(x, y + 1, w, h, 3);
+    editorCtx.fill();
+    editorCtx.globalAlpha = 1;
+
+    if (sel) {
+      editorCtx.strokeStyle = '#ffffff';
+      editorCtx.lineWidth = 2;
+      editorCtx.beginPath();
+      editorCtx.roundRect(x, y + 1, w, h, 3);
+      editorCtx.stroke();
+    }
+
+    // Nom de la note si assez large
+    if (w > 14) {
+      editorCtx.fillStyle = '#000000aa';
+      editorCtx.font = 'bold 9px sans-serif';
+      editorCtx.textAlign = 'left';
+      editorCtx.fillText(NOTE_NAMES[note.midi % 12], x + 3, y + 13);
+    }
+  });
+}
+
+function drawEditorPiano() {
+  // Mini clavier en bas de l'éditeur (juste décoratif)
+  const ctx = editorPianoCtx;
+  const W = editorPianoCanvas.width, H = 80;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#13131a';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#ffffff22';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Clique sur les notes pour les sélectionner • Glisse pour déplacer • Sélectionne puis 🎨 pour changer la couleur', W/2, 45);
+}
+
+// ── INTERACTIONS ÉDITEUR ──
+function editorNoteAt(x, y) {
+  // Retourne l'index de la note sous le curseur (priorité aux plus petites)
+  let found = -1, foundW = Infinity;
+  editorNotes.forEach((note, idx) => {
+    const row = midiToRow(note.midi);
+    const nx  = EDITOR_PIANO_W + note.time * EDITOR_PX_S;
+    const ny  = row * EDITOR_ROW_H;
+    const nw  = Math.max(4, note.duration * EDITOR_PX_S - 2);
+    if (x >= nx && x <= nx + nw && y >= ny && y <= ny + EDITOR_ROW_H - 2) {
+      if (nw < foundW) { found = idx; foundW = nw; }
+    }
+  });
+  return found;
+}
+
+function initEditorEvents() {
+  const canvas = document.getElementById('editor-canvas');
+
+  canvas.addEventListener('mousedown', e => {
+    hideColorPicker();
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const idx = editorNoteAt(x, y);
+
+    if (idx === -1) {
+      // Clic dans le vide : désélectionner
+      if (!e.shiftKey) { editorSelected.clear(); drawEditor(); }
+      return;
+    }
+
+    if (e.shiftKey) {
+      // Shift+clic : toggle sélection
+      if (editorSelected.has(idx)) editorSelected.delete(idx);
+      else editorSelected.add(idx);
+    } else {
+      if (!editorSelected.has(idx)) { editorSelected.clear(); editorSelected.add(idx); }
+    }
+
+    editorDragging = { idx, startX: x, startY: y, origTimes: editorNotes.map(n => n.time) };
+    drawEditor();
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!editorDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const dx = (e.clientX - rect.left) - editorDragging.startX;
+    const dt = dx / EDITOR_PX_S;
+
+    editorSelected.forEach(idx => {
+      const newTime = Math.max(0, editorDragging.origTimes[idx] + dt);
+      editorNotes[idx].time = Math.round(newTime * 100) / 100;
+    });
+    drawEditor();
+  });
+
+  window.addEventListener('mouseup', () => {
+    editorDragging = null;
+  });
+
+  // Tactile
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = t.clientX - rect.left, y = t.clientY - rect.top;
+    const idx = editorNoteAt(x, y);
+    if (idx === -1) { editorSelected.clear(); drawEditor(); return; }
+    if (!editorSelected.has(idx)) { editorSelected.clear(); editorSelected.add(idx); }
+    editorDragging = { idx, startX: x, startY: y, origTimes: editorNotes.map(n => n.time) };
+    drawEditor();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!editorDragging) return;
+    const t = e.changedTouches[0];
+    const rect = canvas.getBoundingClientRect();
+    const dx = (t.clientX - rect.left) - editorDragging.startX;
+    const dt = dx / EDITOR_PX_S;
+    editorSelected.forEach(idx => {
+      editorNotes[idx].time = Math.max(0, Math.round((editorDragging.origTimes[idx] + dt) * 100) / 100);
+    });
+    drawEditor();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', e => { e.preventDefault(); editorDragging = null; }, { passive: false });
+}
+
+// ── COLOR PICKER ──
+function showColorPicker(e) {
+  const panel = document.getElementById('color-picker-panel');
+  panel.classList.add('visible');
+  panel.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+  panel.style.top  = Math.min(e.clientY + 8, window.innerHeight - 200) + 'px';
+}
+
+function hideColorPicker() {
+  document.getElementById('color-picker-panel').classList.remove('visible');
+}
+
+function applyColor(color) {
+  editorSelected.forEach(idx => { editorNotes[idx].color = color; });
+  drawEditor();
+  hideColorPicker();
+}
+
+// ── SAUVEGARDE ÉDITEUR ──
+function saveEditor() {
+  if (!editorRec) return;
+  const lib = getLibrary();
+  const idx = lib.findIndex(r => r.id === editorRec.id);
+  if (idx === -1) {
+    document.getElementById('editor-status').textContent = '❌ Enregistrement introuvable';
+    return;
+  }
+  lib[idx].song = editorNotes;
+  setLibrary(lib);
+  editorRec.song = editorNotes;
+  document.getElementById('editor-status').textContent = '✅ Sauvegardé !';
+  setTimeout(() => { document.getElementById('editor-status').textContent = ''; }, 2000);
+}
+</script>
+<script src="js/renderer.js"></script>
+<script>console.log('avant playback.js');</script>
+<script src="js/playback.js"></script>
+<script>console.log('après playback.js');</script>
+<script src="js/keyboard.js"></script>
+</body>
+</html>

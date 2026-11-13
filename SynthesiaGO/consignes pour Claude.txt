@@ -1,0 +1,166 @@
+# SynthesiaGO
+Application d'apprentissage du piano compatible Roland GO:PIANO
+
+ton devoir est d'utiliser les fichiers mis a ta disposition comme base de travail. j'avais deja commencé à le travailler avec toi
+mais j'avais basculé sur chatgpt qui m'a un peu tout cassé. 
+
+Les problèmes rencontrés :
+    -l'interface à un peu disparu, le clavier qui était visible en bas de l'écran et qui permettait de jouer directement dans l'app à disparu.
+    -lorsque le clavier était encore là, le problème était que les notes ne se décrochaient pas lorsque j'enregistrait un morceau puis quand ça a été réglé, c'est qu'elles se figeaient quand la même note était de nouveau jouée.
+    -dans le mode lecture des enregistrement, il est arrivé que les notes bugent et se retrouvent toutes "tassées" à la fin et jouée en même temps au lieu de suivre le rythme normal
+
+Les objectifs principaux :
+    -reproduire une app comme le logiciel synthesiaGO pour pouvoir jouer des morceaux sur un clavier roland, les enregistrer
+    et les ressortir ensuite sous la forme de notes qui tombent comme on peut le voir dans les tutos piano sur internet.
+    -les morceaux enregistrés doivent être stockés dans des fichiers pouvant être envoyés et lu par l'application sur d'autres appareils.
+    -l'app doit être disponible sur internet via github ou tout autre module permettant sa publication et son accès grâce à un lien.
+    -l'app doit être utilisable sur téléphone, au moins sur iphone en plus de l'être sur pc vu que je ne parvient pas à me connecter à mon piano depuis pon pc
+
+
+
+
+la réponse de l'ancienne discussion Claude :
+Document de passation SynthesiaGO
+
+Les sorties d’outils de cette conversation ont été effacées de mon contexte, donc je ne peux pas redonner de code complet fiable. Mes erreurs connues sont listées à part, à la fin de la section 9.
+
+1. Historique des versions
+Prototype piano_synthesia.html (fichier unique) : clavier 5 octaves (C2 à B6), notes qui tombent (jaune = main gauche, rose = main droite), parseur MIDI maison, jeu au clavier d’ordinateur (AZERTY), démo « Comptine d’un autre été » (version simplifiée par moi), curseur de vitesse, son par oscillateur triangle.
+Ajout du Roland, de l’enregistrement et du score : bouton Web MIDI, enregistrement avec fenêtre et chronomètre, relecture en cyan, mode score (tolérance 0,25 s).
+Passage à piano.html et GitHub Pages : balise viewport, tactile, glisser, bouton « Son OFF ».
+Bibliothèque d’enregistrements : localStorage, renommer, jouer, télécharger en JSON, supprimer. Ajout des notes « live » qui montent depuis la ligne du clavier et s’étirent tant que la touche est tenue.
+Éditeur de notes (horizontal) : sélection, déplacement, couleurs, sauvegarde. C’est le commit 75250d7 « editeur notes + fix notes figees ».
+Corrections : glisser souris, mouseup sur window, tableau releasedLiveBlocks, audioCtx.resume() plus déverrouillage au premier toucher. Tu as alors écrit « ça fonctionne enfin ».
+Bouton « Importer » (JSON) dans la bibliothèque.
+Grosse mise à jour tentée dans piano_final.html : samples, réverb, pause, bouton Jouer = dernière musique (launchSong, lastSong). Ces modifications ont été appliquées dans ce fichier. Le remplacement de l’éditeur par une version verticale avec sélection par rectangle a échoué à chaque tentative (« string not found »). Ce fichier n’a jamais été envoyé ni copié dans les sorties.
+Passage à ChatGPT : projet découpé en index.html + js/renderer.js, js/playback.js, js/keyboard.js + SynthesiaGO/README.md. Dans ce zip, playNote n’était définie nulle part.
+Mon SynthesiaGO.zip : ajout dans playback.js de getAudio, de la réverb, des samples, de playNote, de launchSong, de pauseSong et de lastSong. Dans index.html, j’ai ajouté le bouton Pause, le curseur Réverb et le précharge­ment des samples. Résultat côté toi : le clavier s’affiche une fois le zip extrait, mais les notes live ont disparu.
+
+Dernière version qui marchait bien : celle de l’étape 6, au moment de « ça fonctionne enfin » (piano.html, fichier unique, son par oscillateur). Les étapes 7 et 8 viennent ensuite, et l’étape 6 est la dernière que tu as validée.
+
+Je ne peux pas confirmer les trois critères « clavier visible, enregistrement correct, relecture au bon rythme ». Tu ne t’es pas plaint du rythme, mais je ne l’ai jamais vérifié. Après l’éditeur, tu as signalé un tas de notes à la fin à la relecture. Je ne sais pas si c’est l’enregistrement ou l’éditeur qui l’a causé.
+
+2. Code de la dernière version qui marchait
+Je n’ai pas le code complet en contexte, pour aucun fichier.
+Les fichiers ont été envoyés en pièces jointes dans cette conversation. Ils se téléchargent depuis les cartes de fichier. piano.html a été envoyé plusieurs fois sous le même nom, et la dernière version envoyée est la version « import » (étape 7). SynthesiaGO.zip est le dernier envoi.
+Le sandbox contient peut-être encore ces fichiers, mais je ne peux pas le garantir. Si tu veux, je peux vérifier et te les renvoyer.
+Autre piste fiable : l’historique Git (section 5).
+3. Son et samples
+
+Les samples ont été implémentés, mais jamais vérifiés (je ne sais pas s’ils jouent réellement).
+
+Méthode : fetch des mp3, decodeAudioData, cache sampleCache[midi]. preloadSamples() charge une note sur trois de 36 à 96, 500 ms après le démarrage.
+playNote :
+il utilise l’échantillon exact s’il est chargé, sinon le plus proche, avec playbackRate = 2^((midi − midiChargé)/12) ;
+le volume décroît jusqu’à 0,001 en 3,5 s, avec arrêt à 3,5 s ;
+il n’y a pas de gestion du relâchement de la touche ;
+un oscillateur triangle sert de secours.
+Réverb : ConvolverNode avec une réponse impulsionnelle synthétique (bruit décroissant sur 2,5 s) et un mélange sec/humide. Le curseur #reverb appelle setReverbAmount, valeur par défaut 0,2.
+Source des fichiers : https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/acoustic_grand_piano-mp3/, avec les noms construits comme Cs4.mp3 (dièses).
+
+Ce n’est pas le Salamander Grand Piano, même si je l’ai appelé ainsi. C’est la banque FluidR3_GM. Je pense que ce dépôt nomme les touches noires avec des bémols (Db4), mais je n’en suis pas sûr. Si c’est le cas, les touches noires donnent un 404 et retombent sur l’échantillon voisin transposé. À tester en regardant l’onglet Network.
+
+4. MIDI et téléphone
+
+Établi :
+
+Le piano est un Roland GO:PIANO (page Roland : GO-61P).
+Web MIDI ne fonctionne que sur Chrome et Edge desktop, pas dans Safari iOS.
+Pour l’USB, il faut un câble USB-A vers USB-B. Tu n’en as pas.
+Le mode appairage se lance depuis les réglages du piano. L’écran affiche « BT PAIRING Press [PLAY] ».
+
+Windows :
+
+Dans Windows, des « Appareil inconnu » apparaissaient, puis « GO:PIANO MIDI 3 ».
+Le jumelage échouait avec « réessayez de connecter votre appareil ».
+Roland ne propose aucun pilote Bluetooth MIDI pour Windows (seulement le System Program Ver1.24).
+MIDIberry affichait « No MIDI ports found ».
+La cause exacte n’a jamais été établie. Mon explication « Windows gère mal le BLE MIDI » est une hypothèse.
+
+iPhone :
+
+« WebMIDI Browser » : le piano apparaissait « Connected » dans Setup Bluetooth MIDI Central. Mais l’appli donnait « {} is not iterable », puis « aucun clavier ». Je ne sais pas si cette app est encore maintenue.
+« MIDIWeb Browser » (autre application) : le test de vérification a fait sonner le piano, puis l’appli a détecté le Roland et les notes sont apparues. C’est la combinaison qui a marché.
+J’ai aussi modifié scanMidiInputs (Array.from, try/catch). Je ne sais pas si cela a joué un rôle.
+Live Server via le Wi-Fi n’a pas chargé sur l’iPhone (Norton VPN ou pare-feu suspectés). On est donc passés par GitHub Pages.
+Son sur iPhone : tu dois d’abord toucher autre chose que le clavier. Mon idée d’écran « Appuie ici pour démarrer » n’a pas été implémentée.
+5. Déploiement GitHub
+Compte : martinleyssene. Dépôt : Piano (pas piano-synthesia).
+Pages : déploiement depuis la branche main, dossier racine. Le dépôt a dû passer en public.
+Fichier principal (version avant ChatGPT) : piano.html. Il s’est d’abord appelé piano.hmtl (faute de frappe), d’où des 404.
+URL : https://martinleyssene.github.io/Piano/piano.html.
+Les commits que j’ai vus : 75250d7 « editeur notes + fix notes figees » (HEAD à ce moment-là), eacf43a « toujours des modifs », 4c83bb3 « modifs ».
+75250d7 n’est pas la dernière version qui marchait : le bug des notes figées existait encore. Les commits suivants (« fix notes figees + fix son + fix souris », « fix son iOS + fix notes live », « import enregistrements JSON ») ont été poussés selon mes consignes, mais je ne connais pas leurs hash.
+Le message « samples piano + pause + editeur vertical » que je t’ai fait taper ne décrit pas le contenu réel : je n’avais envoyé aucun fichier correspondant.
+Ton terminal est passé de C:\Users\Martin\Piano à C:\Users\Martin\SynthesiaGO\SynthesiaGO. Je ne sais pas si c’est le même dépôt ni si la structure multi-fichiers a été poussée.
+Retrouver une version ancienne :
+git log --oneline, puis git show <hash>:piano.html > ancien.html ;
+ou sur github.com : Commits, clic sur un commit, « Browse files ».
+Je ne sais pas quelle version précise a été poussée juste après le « ça fonctionne enfin », à vérifier dans l’historique.
+6. Format des enregistrements
+
+L’export JSON contient l’objet complet, indenté avec 2 espaces :
+
+json
+{
+  "id": "rec_1731340000000",
+  "name": "Enregistrement du 11/11/2026 18:13",
+  "date": "2026-11-11T17:13:00.000Z",
+  "notesCount": 42,
+  "song": [
+    { "time": 1.234, "midi": 64, "duration": 0.5, "hand": "recorded", "color": "#44ddff" }
+  ]
+}
+time et duration sont en secondes. time est relatif au début de l’enregistrement.
+midi est le numéro de note MIDI.
+hand vaut recorded pour un enregistrement, left ou right pour un MIDI importé.
+color est optionnel (hexadécimal) et n’est ajouté que par l’éditeur.
+Le stockage se fait dans localStorage, clé piano_recordings_library, sous forme de tableau.
+Le format n’a pas changé, hormis l’ajout de color.
+L’import vérifie seulement que song est un tableau.
+Les couleurs ne sont jamais appliquées à la relecture : spawnNote(midi, hand, duration) ignore color et n’utilise que la classe CSS de hand.
+7. Bugs et solutions
+Bug	Cause / résultat
+piano.hmtl, 404 sur Pages	Faute de frappe, corrigée en renommant le fichier.
+VS Code « nothing to commit »	Fichiers non sauvegardés (point blanc) : Ctrl+S. Vérifié avec Select-String.
+Vim bloqué	Fichier swap : q, puis rm .git/.COMMIT_EDITMSG.swp.
+Touches qui restent allumées	mouseup écouté seulement sur le canvas, déplacé sur window.
+Pas de glisser souris	mousemove ajouté.
+Notes live figées	Diagnostiquée par toi : si on rejoue la même note, l’ancien bloc était écrasé dans liveNoteBlocks et n’était plus animé. Corrigé avec releasedLiveBlocks. Mes diagnostics précédents étaient faux (voir plus bas).
+Pas de son sur iPhone	AudioContext suspendu : resume() plus déverrouillage. Il faut encore toucher ailleurs avant de jouer.
+playNote introuvable (zip ChatGPT)	Fonction définie nulle part, ajoutée dans playback.js.
+ERR_FILE_NOT_FOUND, buildLayout non défini	Zip ouvert sans l’extraire.
+Erreur « } expected » ligne 1153	Cause jamais établie. Le fichier que tu m’as envoyé passait node --check.
+Colorations perdues et notes tassées après l’éditeur	Je ne sais pas. Seule certitude : color n’est pas utilisé à la relecture.
+Clavier disparu, notes bloquées à l’enregistrement	Je n’ai pas vu les modifications de ChatGPT. Je ne sais pas.
+8. Décisions et préférences
+Tu travailles en français, sur un PC Windows avec VS Code, Live Server, Edge, et un iPhone (MIDIWeb Browser). Python et Node ne sont pas installés.
+Au départ, tu voulais que j’indique à chaque modification ce qui est ajouté et supprimé. Après plusieurs échecs de copier-coller, tu as accepté des fichiers complets à remplacer.
+Tu as demandé de l’aide pour copier du texte plutôt que des captures (ChatGPT te l’a aussi proposé).
+Tu ne veux pas ouvrir index.html pendant que ChatGPT y travaille.
+Son « Go Grand » du Roland, sans résonance par défaut, avec un curseur de réverb. « Son OFF » doit couper complètement le synthé.
+Notes live : elles montent depuis le clavier et s’étirent tant que la touche est tenue. Elles ne tombent que pour les relectures.
+Enregistrements : sauvegarde permanente, nommables, supprimables. Export JSON de l’iPhone vers le PC, avec import. « Jouer » doit rejouer la dernière musique, plus un bouton Pause.
+Éditeur : notes à la verticale, sélection par rectangle, déplacement, changement de couleur, sauvegarde persistante.
+Tu as été frustré par les allers-retours et par les deux limites de messages gratuits.
+9. Ce qui restait à faire
+Réparer les notes live dans la structure multi-fichiers. Attention : le code que j’ai proposé pour keyboard.js déclare let liveNoteBlocks. Si index.html le déclare déjà (probable, puisque stopSong y fait référence), cela provoque une erreur « already declared ». Je n’ai pas vérifié.
+Vérifier que les samples se chargent réellement, corriger les noms de fichiers, et décider si on veut un vrai Salamander.
+Refaire l’éditeur vertical avec sélection par rectangle (jamais livré) et corriger la sauvegarde.
+Appliquer color à la relecture et diagnostiquer les notes tassées.
+Tester la pause (elle supprime les blocs en vol, donc des notes peuvent disparaître) et le curseur de réverb.
+Ajouter l’écran « Appuie ici pour démarrer » pour l’audio iOS.
+Récupérer les trois bugs de ChatGPT : clavier disparu, notes bloquées, notes tassées.
+
+Mes erreurs à ne pas reproduire :
+
+J’ai appelé « Salamander » une banque FluidR3_GM.
+J’ai cité une application « Capisco » qui n’existe pas.
+J’ai dit que for...in avec delete était une cause de bug : c’est faux, ce n’est pas un problème en JavaScript.
+J’ai affirmé que les notes live « n’avaient pas été migrées » sans l’avoir vérifié.
+Je t’ai fait committer un message qui décrivait des fichiers jamais livrés.
+
+
+Fin du message de Claude
+
+Si tu veux plus d'explication sur certains points, dis moi, je t'expliquerai comme je le pourrais ce que j'ai fait avec Claude et les modifications qu'il ne sais pas que je pourrais connaitre.
